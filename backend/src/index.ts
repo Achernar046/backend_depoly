@@ -7,6 +7,7 @@ import officerRoutes from './routes/officer';
 import walletRoutes from './routes/wallet';
 import transactionRoutes from './routes/transactions';
 import userRoutes from './routes/users';
+import appRoutes from './routes/app';
 import { connectToDatabase } from './lib/mongodb';
 
 dotenv.config();
@@ -25,6 +26,7 @@ app.use('/api/officer', officerRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/app', appRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
