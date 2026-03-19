@@ -1,19 +1,12 @@
 {
-  "name": "waste-coin-project",
+  "name": "waste-coin-frontend",
   "version": "1.0.0",
-  "description": "Waste-to-Coin Monorepo",
+  "description": "Waste-to-Coin Frontend Application",
   "scripts": {
-    "dev:frontend": "cd frontend && npm run dev",
-    "dev:backend": "cd backend && npm run dev",
-    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
-    "build:frontend": "cd frontend && npm run build",
-    "build:backend": "cd backend && npm run build",
-    "build": "npm run build:frontend && npm run build:backend",
-    "compile": "hardhat compile",
-    "test:contract": "hardhat test",
-    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
-    "verify-setup": "node scripts/verify-setup.js",
-    "generate-secrets": "node scripts/generate-secrets.js"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
   "keywords": [
     "blockchain",

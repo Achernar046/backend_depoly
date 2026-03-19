@@ -76,7 +76,7 @@ export default function Dashboard() {
             });
             const data = await response.json();
             if (response.ok) {
-                setTransactions(data.transactions);
+                setTransactions(Array.isArray(data) ? data : (data.transactions || []));
             }
         } catch (error) {
             console.error('Failed to fetch transactions:', error);

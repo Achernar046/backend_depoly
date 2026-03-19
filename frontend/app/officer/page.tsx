@@ -71,7 +71,7 @@ export default function OfficerDashboard() {
             });
             const data = await response.json();
             if (response.ok) {
-                setUsers(data.users);
+                setUsers(Array.isArray(data) ? data : (data.users || []));
             }
         } catch (error) {
             console.error('Failed to fetch users:', error);
@@ -87,8 +87,8 @@ export default function OfficerDashboard() {
             });
             const data = await response.json();
             if (response.ok) {
-                setTransactions(data.transactions);
-                setTotalDistributed(data.totalDistributed);
+                setTransactions(Array.isArray(data) ? data : (data.transactions || []));
+                setTotalDistributed(data.totalDistributed || 0);
             }
         } catch (error) {
             console.error('Failed to fetch transactions:', error);
