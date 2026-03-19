@@ -16,6 +16,7 @@ interface TransactionRecord {
 
 export default function Dashboard() {
     const router = useRouter();
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
     const [user, setUser] = useState<any>(null);
     const [balance, setBalance] = useState('0');
     const [loading, setLoading] = useState(true);
@@ -54,7 +55,7 @@ export default function Dashboard() {
 
     const fetchBalance = async (token: string) => {
         try {
-            const response = await fetch('/api/wallet/balance', {
+            const response = await fetch(`${API_URL}/api/wallet/balance`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await response.json();
@@ -70,7 +71,7 @@ export default function Dashboard() {
 
     const fetchTransactions = async (token: string) => {
         try {
-            const response = await fetch('/api/transactions/history', {
+            const response = await fetch(`${API_URL}/api/transactions/history`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await response.json();

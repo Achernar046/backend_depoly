@@ -30,6 +30,7 @@ interface TransactionRecord {
 
 export default function OfficerDashboard() {
     const router = useRouter();
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
     const [user, setUser] = useState<any>(null);
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
@@ -65,7 +66,7 @@ export default function OfficerDashboard() {
 
     const fetchUsers = async (token: string) => {
         try {
-            const response = await fetch('/api/users/list', {
+            const response = await fetch(`${API_URL}/api/users/list`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await response.json();
@@ -81,7 +82,7 @@ export default function OfficerDashboard() {
 
     const fetchTransactions = async (token: string) => {
         try {
-            const response = await fetch('/api/officer/transactions', {
+            const response = await fetch(`${API_URL}/api/officer/transactions`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await response.json();
@@ -96,7 +97,7 @@ export default function OfficerDashboard() {
 
     const fetchPendingCount = async (token: string) => {
         try {
-            const response = await fetch('/api/waste/pending', {
+            const response = await fetch(`${API_URL}/api/waste/pending`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await response.json();
@@ -136,7 +137,7 @@ export default function OfficerDashboard() {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch('/api/officer/add-coins', {
+            const response = await fetch(`${API_URL}/api/officer/add-coins`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

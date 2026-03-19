@@ -15,6 +15,7 @@ export default function AuthPage() {
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const router = useRouter();
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -22,7 +23,7 @@ export default function AuthPage() {
         setLoading(true);
 
         try {
-            const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+            const endpoint = mode === 'login' ? `${API_URL}/api/auth/login` : `${API_URL}/api/auth/register`;
             const body = mode === 'login'
                 ? { email, password }
                 : { user_id: userId, name, email, password, role };
