@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { getDatabase } from '../lib/mongodb';
 import { authMiddleware, officerMiddleware, AuthenticatedRequest } from '../lib/auth-middleware';
-import { WasteSubmission, Transaction, User } from '../models/types';
+import { WasteSubmission, Transaction, User, Notification } from '../models/types';
 import { ObjectId } from 'mongodb';
 import { mintCoins } from '../lib/blockchain';
 
@@ -44,6 +44,22 @@ router.post('/submit', authMiddleware, async (req: AuthenticatedRequest, res: Re
         });
     } catch (error) {
         console.error('Waste submission error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// GET /api/waste/my-submissions
+router.get('/my-submissions', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const db = await getDatabase();
+        const submissions = await db.collection<WasteSubmission>('waste_submissions')
+            .find({ user_id: new ObjectId(req.user!.userId) })
+            .sort({ created_at: -1 })
+            .toArray();
+
+        res.json(submissions);
+    } catch (error) {
+        console.error('Fetch my submissions error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -137,6 +153,16 @@ router.post('/approve', officerMiddleware, async (req: AuthenticatedRequest, res
         };
 
         await db.collection<Transaction>('transactions').insertOne(transaction);
+
+        // Create notification for user
+        await db.collection('notifications').insertOne({
+            user_id: submission.user_id,
+            title: 'การส่งขยะถูกอนุมัติ!',
+            message: `ขยะ ${submission.waste_type} ของคุณได้รับการตรวจสอบแล้ว และคุณได้รับ ${coin_amount} WST`,
+            type: 'success',
+            is_read: false,
+            created_at: new Date(),
+        });
 
         res.json({
             message: 'Submission approved and coins minted',

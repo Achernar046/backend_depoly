@@ -8,6 +8,8 @@ export interface User {
     password_hash: string;
     role: 'user' | 'officer';
     wallet_address: string;
+    profile_image?: string;
+    phone_number?: string;
     created_at: Date;
     updated_at: Date;
 }
@@ -47,5 +49,39 @@ export interface Transaction {
     blockchain_tx_hash: string;
     waste_submission_id?: ObjectId;
     status: 'pending' | 'confirmed' | 'failed';
+    created_at: Date;
+}
+
+export interface Reward {
+    _id?: ObjectId;
+    name: string;
+    description: string;
+    image_url: string;
+    coin_price: number;
+    stock: number;
+    category?: string;
+    created_at: Date;
+    updated_at: Date;
+}
+
+export interface RedemptionHistory {
+    _id?: ObjectId;
+    user_id: ObjectId;
+    reward_id: ObjectId;
+    reward_name: string;
+    coin_price: number;
+    status: 'pending' | 'processing' | 'shipped' | 'delivered';
+    blockchain_tx_hash?: string;
+    created_at: Date;
+    updated_at: Date;
+}
+
+export interface Notification {
+    _id?: ObjectId;
+    user_id: ObjectId;
+    title: string;
+    message: string;
+    type: 'success' | 'info' | 'warning' | 'error';
+    is_read: boolean;
     created_at: Date;
 }

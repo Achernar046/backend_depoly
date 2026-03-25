@@ -8,6 +8,8 @@ import walletRoutes from './routes/wallet';
 import transactionRoutes from './routes/transactions';
 import userRoutes from './routes/users';
 import appRoutes from './routes/app';
+import rewardRoutes from './routes/rewards';
+import notificationRoutes from './routes/notifications';
 import { connectToDatabase } from './lib/mongodb';
 
 dotenv.config();
@@ -27,6 +29,8 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/app', appRoutes);
+app.use('/api/rewards', rewardRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
