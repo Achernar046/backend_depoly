@@ -1,12 +1,14 @@
 import { Router, Response } from 'express';
 import { getDatabase } from '../lib/mongodb';
-import { authMiddleware, AuthenticatedRequest } from '../lib/auth-middleware';
+import { authMiddleware, officerMiddleware, AuthenticatedRequest } from '../lib/auth-middleware';
 import { Reward, RedemptionHistory, Transaction, Notification } from '../models/types';
 import { ObjectId } from 'mongodb';
 import { getOfficerWallet, transferCoins } from '../lib/blockchain';
 import { getUserWalletSigner } from '../lib/wallet';
 
 const router = Router();
+
+// --- Public/User Endpoints ---
 
 // GET /api/rewards/list
 router.get('/list', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
@@ -115,6 +117,91 @@ router.get('/history', authMiddleware, async (req: AuthenticatedRequest, res: Re
         res.json(history);
     } catch (error) {
         console.error('Fetch redemption history error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// --- Officer Management Endpoints ---
+
+// POST /api/rewards/add
+router.post('/add', officerMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { name, description, image_url, coin_price, stock, category } = req.body;
+
+        if (!name || !coin_price || stock === undefined) {
+            return res.status(400).json({ error: 'Name, coin price, and stock are required' });
+        }
+
+        const db = await getDatabase();
+        const newReward: Reward = {
+            name,
+            description,
+            image_url,
+            coin_price: parseFloat(coin_price),
+            stock: parseInt(stock),
+            category,
+            created_at: new Date(),
+            updated_at: new Date(),
+        };
+
+        const result = await db.collection<Reward>('rewards').insertOne(newReward);
+
+        res.status(201).json({
+            message: 'Reward added successfully',
+            reward: {
+                id: result.insertedId,
+                ...newReward
+            }
+        });
+    } catch (error) {
+        console.error('Add reward error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// PUT /api/rewards/update/:id
+router.put('/update/:id', officerMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+
+        if (updates.coin_price) updates.coin_price = parseFloat(updates.coin_price);
+        if (updates.stock !== undefined) updates.stock = parseInt(updates.stock);
+        
+        updates.updated_at = new Date();
+
+        const db = await getDatabase();
+        const result = await db.collection<Reward>('rewards').updateOne(
+            { _id: new ObjectId(id) },
+            { $set: updates }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ error: 'Reward not found' });
+        }
+
+        res.json({ message: 'Reward updated successfully' });
+    } catch (error) {
+        console.error('Update reward error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// DELETE /api/rewards/delete/:id
+router.delete('/delete/:id', officerMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+
+        const db = await getDatabase();
+        const result = await db.collection<Reward>('rewards').deleteOne({ _id: new ObjectId(id) });
+
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ error: 'Reward not found' });
+        }
+
+        res.json({ message: 'Reward deleted successfully' });
+    } catch (error) {
+        console.error('Delete reward error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
