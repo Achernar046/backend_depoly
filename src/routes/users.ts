@@ -2,7 +2,8 @@ import { Router, Response } from 'express';
 import { getDatabase } from '../lib/mongodb';
 import { officerMiddleware, authMiddleware, AuthenticatedRequest } from '../lib/auth-middleware';
 import { ObjectId } from 'mongodb';
-import { User } from '../models/types';
+import { User, WasteSubmission } from '../models/types';
+import { hashPassword, comparePassword } from '../lib/auth';
 
 const router = Router();
 
@@ -10,8 +11,10 @@ const router = Router();
 router.get('/profile', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
         const db = await getDatabase();
+        const userId = new ObjectId(req.user!.userId);
+
         const user = await db.collection<User>('users').findOne(
-            { _id: new ObjectId(req.user!.userId) },
+            { _id: userId },
             { 
                 projection: { 
                     password_hash: 0,
@@ -23,7 +26,30 @@ router.get('/profile', authMiddleware, async (req: AuthenticatedRequest, res: Re
             return res.status(404).json({ error: 'User not found' });
         }
 
-        res.json(user);
+        // Get stats for user dashboard/profile
+        const submissionCount = await db.collection<WasteSubmission>('waste_submissions')
+            .countDocuments({ user_id: userId });
+
+        const approvedCount = await db.collection<WasteSubmission>('waste_submissions')
+            .countDocuments({ user_id: userId, status: 'approved' });
+
+        // Calculate total coins earned from submissions
+        const totalCoinsResult = await db.collection<WasteSubmission>('waste_submissions')
+            .aggregate([
+                { $match: { user_id: userId, status: 'approved' } },
+                { $group: { _id: null, total: { $sum: '$coin_amount' } } }
+            ]).toArray();
+
+        const total_coins_earned = totalCoinsResult.length > 0 ? totalCoinsResult[0].total : 0;
+
+        res.json({
+            ...user,
+            stats: {
+                total_submissions: submissionCount,
+                approved_submissions: approvedCount,
+                total_coins_earned: total_coins_earned
+            }
+        });
     } catch (error) {
         console.error('Fetch profile error:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -36,7 +62,7 @@ router.put('/profile', authMiddleware, async (req: AuthenticatedRequest, res: Re
         const { name, profile_image, phone_number } = req.body;
         const db = await getDatabase();
 
-        const updateData: Partial<User> = {
+        const updateData: any = {
             updated_at: new Date()
         };
 
@@ -60,6 +86,49 @@ router.put('/profile', authMiddleware, async (req: AuthenticatedRequest, res: Re
     }
 });
 
+// POST /api/users/change-password
+router.post('/change-password', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ error: 'Current and new password are required' });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({ error: 'New password must be at least 6 characters' });
+        }
+
+        const db = await getDatabase();
+        const user = await db.collection<User>('users').findOne({ _id: new ObjectId(req.user!.userId) });
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const isPasswordValid = await comparePassword(currentPassword, user.password_hash);
+        if (!isPasswordValid) {
+            return res.status(401).json({ error: 'Invalid current password' });
+        }
+
+        const newPasswordHash = await hashPassword(newPassword);
+        await db.collection<User>('users').updateOne(
+            { _id: user._id },
+            { 
+                $set: { 
+                    password_hash: newPasswordHash,
+                    updated_at: new Date()
+                } 
+            }
+        );
+
+        res.json({ message: 'Password changed successfully' });
+    } catch (error) {
+        console.error('Change password error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // GET /api/users/list
 router.get('/list', officerMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -70,11 +139,10 @@ router.get('/list', officerMiddleware, async (req: AuthenticatedRequest, res: Re
                 { 
                     projection: { 
                         password_hash: 0,
-                        created_at: 0,
-                        updated_at: 0
                     } 
                 }
             )
+            .sort({ created_at: -1 })
             .toArray();
 
         res.json(users);
