@@ -90,4 +90,50 @@ router.get('/transactions', officerMiddleware, async (req: AuthenticatedRequest,
     }
 });
 
+// GET /api/officer/rewards/report
+router.get('/rewards/report', officerMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const db = await getDatabase();
+        
+        // Part 1: Inventory Status
+        const inventory = await db.collection('rewards')
+            .find({})
+            .project({ name: 1, coin_price: 1, stock: 1 })
+            .toArray();
+
+        // Part 2: Redemption History
+        const history = await db.collection('redemption_history')
+            .aggregate([
+                {
+                    $lookup: {
+                        from: 'users',
+                        localField: 'user_id',
+                        foreignField: '_id',
+                        as: 'user'
+                    }
+                },
+                { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
+                {
+                    $project: {
+                        _id: 1,
+                        user_id: 1,
+                        user_name: { $ifNull: ['$user.name', '$user.email'] },
+                        reward_name: 1,
+                        created_at: 1,
+                        status: 1
+                    }
+                },
+                { $sort: { created_at: -1 } }
+            ]).toArray();
+
+        res.json({
+            inventory,
+            history
+        });
+    } catch (error) {
+        console.error('Fetch rewards report error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 export default router;
