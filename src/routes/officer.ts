@@ -7,6 +7,10 @@ import { ObjectId } from 'mongodb';
 
 const router = Router();
 
+function isValidObjectId(value: string): boolean {
+    return ObjectId.isValid(value);
+}
+
 // POST /api/officer/add-coins
 router.post('/add-coins', officerMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -19,6 +23,10 @@ router.post('/add-coins', officerMiddleware, async (req: AuthenticatedRequest, r
 
         if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
             return res.status(400).json({ error: 'Amount must be greater than 0' });
+        }
+
+        if (!isValidObjectId(user_id)) {
+            return res.status(400).json({ error: 'Invalid user ID' });
         }
 
         const db = await getDatabase();

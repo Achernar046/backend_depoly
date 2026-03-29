@@ -8,6 +8,20 @@ import { getUserWalletSigner } from '../lib/wallet';
 
 const router = Router();
 
+function isValidObjectId(value: string): boolean {
+    return ObjectId.isValid(value);
+}
+
+function parsePositiveNumber(value: unknown): number | null {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseNonNegativeInteger(value: unknown): number | null {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
 // --- Public/User Endpoints ---
 
 // GET /api/rewards/list
@@ -31,6 +45,10 @@ router.post('/redeem', authMiddleware, async (req: AuthenticatedRequest, res: Re
             return res.status(400).json({ error: 'Reward ID is required' });
         }
 
+        if (!isValidObjectId(reward_id)) {
+            return res.status(400).json({ error: 'Invalid reward ID' });
+        }
+
         const db = await getDatabase();
         const reward = await db.collection<Reward>('rewards').findOne({ _id: new ObjectId(reward_id) });
 
@@ -45,15 +63,27 @@ router.post('/redeem', authMiddleware, async (req: AuthenticatedRequest, res: Re
         // Get user wallet signer and transfer coins to officer (organization)
         const userSigner = await getUserWalletSigner(req.user!.userId);
         const officerWallet = getOfficerWallet();
-        
-        // Blockchain transaction
-        const { txHash } = await transferCoins(userSigner, officerWallet.address, reward.coin_price);
 
-        // Deduct stock
-        await db.collection<Reward>('rewards').updateOne(
-            { _id: reward._id },
+        // Reserve stock atomically to avoid overselling on concurrent redemptions.
+        const stockReservation = await db.collection<Reward>('rewards').updateOne(
+            { _id: reward._id, stock: { $gt: 0 } },
             { $inc: { stock: -1 }, $set: { updated_at: new Date() } }
         );
+
+        if (stockReservation.matchedCount === 0) {
+            return res.status(400).json({ error: 'Reward out of stock' });
+        }
+
+        let txHash: string;
+        try {
+            ({ txHash } = await transferCoins(userSigner, officerWallet.address, reward.coin_price));
+        } catch (error) {
+            await db.collection<Reward>('rewards').updateOne(
+                { _id: reward._id },
+                { $inc: { stock: 1 }, $set: { updated_at: new Date() } }
+            );
+            throw error;
+        }
 
         // Record redemption history
         const redemption: RedemptionHistory = {
@@ -132,13 +162,24 @@ router.post('/add', officerMiddleware, async (req: AuthenticatedRequest, res: Re
             return res.status(400).json({ error: 'Name, coin price, and stock are required' });
         }
 
+        const parsedCoinPrice = parsePositiveNumber(coin_price);
+        const parsedStock = parseNonNegativeInteger(stock);
+
+        if (parsedCoinPrice === null) {
+            return res.status(400).json({ error: 'Coin price must be greater than 0' });
+        }
+
+        if (parsedStock === null) {
+            return res.status(400).json({ error: 'Stock must be a non-negative integer' });
+        }
+
         const db = await getDatabase();
         const newReward: Reward = {
             name,
             description,
             image_url,
-            coin_price: parseFloat(coin_price),
-            stock: parseInt(stock),
+            coin_price: parsedCoinPrice,
+            stock: parsedStock,
             category,
             created_at: new Date(),
             updated_at: new Date(),
@@ -165,8 +206,25 @@ router.put('/update/:id', officerMiddleware, async (req: AuthenticatedRequest, r
         const { id } = req.params;
         const updates = req.body;
 
-        if (updates.coin_price) updates.coin_price = parseFloat(updates.coin_price);
-        if (updates.stock !== undefined) updates.stock = parseInt(updates.stock);
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ error: 'Invalid reward ID' });
+        }
+
+        if (updates.coin_price !== undefined) {
+            const parsedCoinPrice = parsePositiveNumber(updates.coin_price);
+            if (parsedCoinPrice === null) {
+                return res.status(400).json({ error: 'Coin price must be greater than 0' });
+            }
+            updates.coin_price = parsedCoinPrice;
+        }
+
+        if (updates.stock !== undefined) {
+            const parsedStock = parseNonNegativeInteger(updates.stock);
+            if (parsedStock === null) {
+                return res.status(400).json({ error: 'Stock must be a non-negative integer' });
+            }
+            updates.stock = parsedStock;
+        }
         
         updates.updated_at = new Date();
 
@@ -191,6 +249,10 @@ router.put('/update/:id', officerMiddleware, async (req: AuthenticatedRequest, r
 router.delete('/delete/:id', officerMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
+
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ error: 'Invalid reward ID' });
+        }
 
         const db = await getDatabase();
         const result = await db.collection<Reward>('rewards').deleteOne({ _id: new ObjectId(id) });
