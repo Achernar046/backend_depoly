@@ -54,7 +54,7 @@ router.get('/dashboard', authMiddleware, async (req: AuthenticatedRequest, res: 
 router.post('/verify-identity', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { password } = req.body;
-        
+
         if (!password) {
             return res.status(400).json({ error: 'Password is required' });
         }
