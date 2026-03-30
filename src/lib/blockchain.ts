@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import { getConfig } from './config';
 
 // ABI for WasteCoin contract (only the functions we need)
 export const WASTE_COIN_ABI = [
@@ -12,9 +13,11 @@ export const WASTE_COIN_ABI = [
     'event Transfer(address indexed from, address indexed to, uint256 value)',
 ];
 
-const RPC_URL = process.env.SEPOLIA_RPC_URL || 'https://sepolia.infura.io/v3/';
-const CONTRACT_ADDRESS = process.env.WASTE_COIN_CONTRACT_ADDRESS || '';
-const OFFICER_PRIVATE_KEY = process.env.OFFICER_PRIVATE_KEY || '';
+const {
+    sepoliaRpcUrl: RPC_URL,
+    wasteCoinContractAddress: CONTRACT_ADDRESS,
+    officerPrivateKey: OFFICER_PRIVATE_KEY,
+} = getConfig();
 
 /**
  * Get Ethereum provider for Sepolia testnet
@@ -44,9 +47,6 @@ export function getContractWithSigner(wallet: ethers.Wallet): ethers.Contract {
  * Get officer wallet for minting coins
  */
 export function getOfficerWallet(): ethers.Wallet {
-    if (!OFFICER_PRIVATE_KEY) {
-        throw new Error('OFFICER_PRIVATE_KEY not configured');
-    }
     const provider = getProvider();
     return new ethers.Wallet(OFFICER_PRIVATE_KEY, provider);
 }

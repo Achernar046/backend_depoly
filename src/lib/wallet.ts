@@ -3,9 +3,10 @@ import crypto from 'crypto';
 import { getDatabase } from './mongodb';
 import { getProvider } from './blockchain';
 import { ObjectId } from 'mongodb';
-import { Wallet as WalletDoc } from '@/models/types';
+import { Wallet as WalletDoc } from '../models/types';
+import { getConfig } from './config';
 
-const ENCRYPTION_SECRET = process.env.ENCRYPTION_SECRET || 'default-secret-change-this';
+const { encryptionSecret: ENCRYPTION_SECRET } = getConfig();
 const ALGORITHM = 'aes-256-cbc';
 
 /**

@@ -5,6 +5,7 @@ import { getWalletBalance, transferCoins } from '../lib/blockchain';
 import { getUserWalletSigner, decryptPrivateKey } from '../lib/wallet';
 import { Transaction, Wallet as WalletDoc } from '../models/types';
 import { ObjectId } from 'mongodb';
+import { getConfig } from '../lib/config';
 
 const router = Router();
 
@@ -93,6 +94,10 @@ router.post('/transfer', authMiddleware, async (req: AuthenticatedRequest, res: 
 // GET /api/wallet/export
 router.get('/export', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
+        if (!getConfig().walletExportEnabled) {
+            return res.status(403).json({ error: 'Wallet export is disabled' });
+        }
+
         const db = await getDatabase();
         const walletDoc = await db.collection<WalletDoc>('wallets').findOne({
             user_id: new ObjectId(req.user!.userId),

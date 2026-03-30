@@ -1,14 +1,7 @@
 import { MongoClient, Db } from 'mongodb';
-import dotenv from 'dotenv';
+import { getConfig } from './config';
 
-dotenv.config();
-
-const MONGODB_URI = process.env.MONGODB_URI || '';
-const MONGODB_DB = process.env.MONGODB_DB || 'waste-coin-db';
-
-if (!MONGODB_URI) {
-    throw new Error('Please define the MONGODB_URI environment variable');
-}
+const { mongodbUri: MONGODB_URI, mongodbDb: MONGODB_DB } = getConfig();
 
 let cachedClient: MongoClient | null = null;
 let cachedDb: Db | null = null;
@@ -30,4 +23,9 @@ export async function connectToDatabase() {
 export async function getDatabase(): Promise<Db> {
     const { db } = await connectToDatabase();
     return db;
+}
+
+export async function pingDatabase(): Promise<void> {
+    const { db } = await connectToDatabase();
+    await db.command({ ping: 1 });
 }
