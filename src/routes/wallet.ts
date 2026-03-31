@@ -6,6 +6,7 @@ import { getUserWalletSigner, decryptPrivateKey } from '../lib/wallet';
 import { Transaction, Wallet as WalletDoc } from '../models/types';
 import { ObjectId } from 'mongodb';
 import { getConfig } from '../lib/config';
+import { isValidEthereumAddress, parsePositiveNumber } from '../lib/validation';
 
 const router = Router();
 
@@ -55,14 +56,18 @@ router.get('/info', authMiddleware, async (req: AuthenticatedRequest, res: Respo
 router.post('/transfer', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { to_address, amount } = req.body;
-        const numericAmount = Number(amount);
+        const numericAmount = parsePositiveNumber(amount);
 
-        if (!to_address || !numericAmount) {
+        if (!to_address || numericAmount === null) {
             return res.status(400).json({ error: 'Recipient address and amount are required' });
         }
 
-        if (numericAmount <= 0) {
-            return res.status(400).json({ error: 'Amount must be greater than 0' });
+        if (!isValidEthereumAddress(to_address)) {
+            return res.status(400).json({ error: 'Invalid recipient wallet address' });
+        }
+
+        if (to_address.toLowerCase() === req.user!.walletAddress.toLowerCase()) {
+            return res.status(400).json({ error: 'Cannot transfer to the same wallet address' });
         }
 
         const signer = await getUserWalletSigner(req.user!.userId);
@@ -87,7 +92,7 @@ router.post('/transfer', authMiddleware, async (req: AuthenticatedRequest, res: 
         });
     } catch (error) {
         console.error('Transfer error:', error);
-        res.status(500).json({ error: 'Transfer failed: ' + (error as Error).message });
+        res.status(500).json({ error: 'Transfer failed' });
     }
 });
 

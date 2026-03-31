@@ -5,24 +5,9 @@ import { Reward, RedemptionHistory, Transaction, Notification } from '../models/
 import { ObjectId } from 'mongodb';
 import { getOfficerWallet, transferCoins } from '../lib/blockchain';
 import { getUserWalletSigner } from '../lib/wallet';
+import { isValidObjectId, parseNonNegativeInteger, parsePositiveNumber, sanitizeString } from '../lib/validation';
 
 const router = Router();
-
-function isValidObjectId(value: string): boolean {
-    return ObjectId.isValid(value);
-}
-
-function parsePositiveNumber(value: unknown): number | null {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function parseNonNegativeInteger(value: unknown): number | null {
-    const parsed = Number(value);
-    return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
-}
-
-// --- Public/User Endpoints ---
 
 // GET /api/rewards/list
 router.get('/list', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
@@ -39,18 +24,18 @@ router.get('/list', authMiddleware, async (req: AuthenticatedRequest, res: Respo
 // POST /api/rewards/redeem
 router.post('/redeem', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { reward_id } = req.body;
+        const rewardId = req.body.reward_id;
 
-        if (!reward_id) {
+        if (!rewardId) {
             return res.status(400).json({ error: 'Reward ID is required' });
         }
 
-        if (!isValidObjectId(reward_id)) {
+        if (!isValidObjectId(rewardId)) {
             return res.status(400).json({ error: 'Invalid reward ID' });
         }
 
         const db = await getDatabase();
-        const reward = await db.collection<Reward>('rewards').findOne({ _id: new ObjectId(reward_id) });
+        const reward = await db.collection<Reward>('rewards').findOne({ _id: new ObjectId(rewardId) });
 
         if (!reward) {
             return res.status(404).json({ error: 'Reward not found' });
@@ -60,11 +45,9 @@ router.post('/redeem', authMiddleware, async (req: AuthenticatedRequest, res: Re
             return res.status(400).json({ error: 'Reward out of stock' });
         }
 
-        // Get user wallet signer and transfer coins to officer (organization)
         const userSigner = await getUserWalletSigner(req.user!.userId);
         const officerWallet = getOfficerWallet();
 
-        // Reserve stock atomically to avoid overselling on concurrent redemptions.
         const stockReservation = await db.collection<Reward>('rewards').updateOne(
             { _id: reward._id, stock: { $gt: 0 } },
             { $inc: { stock: -1 }, $set: { updated_at: new Date() } }
@@ -85,7 +68,6 @@ router.post('/redeem', authMiddleware, async (req: AuthenticatedRequest, res: Re
             throw error;
         }
 
-        // Record redemption history
         const redemption: RedemptionHistory = {
             user_id: new ObjectId(req.user!.userId),
             reward_id: reward._id!,
@@ -99,7 +81,6 @@ router.post('/redeem', authMiddleware, async (req: AuthenticatedRequest, res: Re
 
         await db.collection<RedemptionHistory>('redemption_history').insertOne(redemption);
 
-        // Record transaction
         const transaction: Transaction = {
             user_id: new ObjectId(req.user!.userId),
             type: 'exchange',
@@ -112,15 +93,16 @@ router.post('/redeem', authMiddleware, async (req: AuthenticatedRequest, res: Re
 
         await db.collection<Transaction>('transactions').insertOne(transaction);
 
-        // Create notification
-        await db.collection('notifications').insertOne({
+        const notification: Notification = {
             user_id: new ObjectId(req.user!.userId),
-            title: 'แลกรางวัลสำเร็จ!',
-            message: `คุณได้แลก ${reward.name} เรียบร้อยแล้ว`,
+            title: '\u0e41\u0e25\u0e01\u0e23\u0e32\u0e07\u0e27\u0e31\u0e25\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08!',
+            message: `\u0e04\u0e38\u0e13\u0e44\u0e14\u0e49\u0e41\u0e25\u0e01 ${reward.name} \u0e40\u0e23\u0e35\u0e22\u0e1a\u0e23\u0e49\u0e2d\u0e22\u0e41\u0e25\u0e49\u0e27`,
             type: 'success',
             is_read: false,
             created_at: new Date(),
-        });
+        };
+
+        await db.collection<Notification>('notifications').insertOne(notification);
 
         res.json({
             message: 'Redemption successful',
@@ -131,7 +113,7 @@ router.post('/redeem', authMiddleware, async (req: AuthenticatedRequest, res: Re
         });
     } catch (error) {
         console.error('Redeem reward error:', error);
-        res.status(500).json({ error: 'Redemption failed: ' + (error as Error).message });
+        res.status(500).json({ error: 'Redemption failed' });
     }
 });
 
@@ -151,33 +133,25 @@ router.get('/history', authMiddleware, async (req: AuthenticatedRequest, res: Re
     }
 });
 
-// --- Officer Management Endpoints ---
-
 // POST /api/rewards/add
 router.post('/add', officerMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { name, description, image_url, coin_price, stock, category } = req.body;
+        const name = sanitizeString(req.body.name, 120);
+        const description = sanitizeString(req.body.description, 1000) ?? '';
+        const imageUrl = sanitizeString(req.body.image_url, 2048) ?? '';
+        const category = sanitizeString(req.body.category, 80);
+        const parsedCoinPrice = parsePositiveNumber(req.body.coin_price);
+        const parsedStock = parseNonNegativeInteger(req.body.stock);
 
-        if (!name || !coin_price || stock === undefined) {
+        if (!name || parsedCoinPrice === null || parsedStock === null) {
             return res.status(400).json({ error: 'Name, coin price, and stock are required' });
-        }
-
-        const parsedCoinPrice = parsePositiveNumber(coin_price);
-        const parsedStock = parseNonNegativeInteger(stock);
-
-        if (parsedCoinPrice === null) {
-            return res.status(400).json({ error: 'Coin price must be greater than 0' });
-        }
-
-        if (parsedStock === null) {
-            return res.status(400).json({ error: 'Stock must be a non-negative integer' });
         }
 
         const db = await getDatabase();
         const newReward: Reward = {
             name,
             description,
-            image_url,
+            image_url: imageUrl,
             coin_price: parsedCoinPrice,
             stock: parsedStock,
             category,
@@ -204,10 +178,34 @@ router.post('/add', officerMiddleware, async (req: AuthenticatedRequest, res: Re
 router.put('/update/:id', officerMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
-        const updates = req.body;
+        const updates = req.body as Record<string, unknown>;
 
         if (!isValidObjectId(id)) {
             return res.status(400).json({ error: 'Invalid reward ID' });
+        }
+
+        const updateData: Record<string, unknown> = {
+            updated_at: new Date(),
+        };
+
+        if (updates.name !== undefined) {
+            const name = sanitizeString(updates.name, 120);
+            if (!name) {
+                return res.status(400).json({ error: 'Name must not be empty' });
+            }
+            updateData.name = name;
+        }
+
+        if (updates.description !== undefined) {
+            updateData.description = sanitizeString(updates.description, 1000) ?? '';
+        }
+
+        if (updates.image_url !== undefined) {
+            updateData.image_url = sanitizeString(updates.image_url, 2048) ?? '';
+        }
+
+        if (updates.category !== undefined) {
+            updateData.category = sanitizeString(updates.category, 80);
         }
 
         if (updates.coin_price !== undefined) {
@@ -215,7 +213,7 @@ router.put('/update/:id', officerMiddleware, async (req: AuthenticatedRequest, r
             if (parsedCoinPrice === null) {
                 return res.status(400).json({ error: 'Coin price must be greater than 0' });
             }
-            updates.coin_price = parsedCoinPrice;
+            updateData.coin_price = parsedCoinPrice;
         }
 
         if (updates.stock !== undefined) {
@@ -223,15 +221,13 @@ router.put('/update/:id', officerMiddleware, async (req: AuthenticatedRequest, r
             if (parsedStock === null) {
                 return res.status(400).json({ error: 'Stock must be a non-negative integer' });
             }
-            updates.stock = parsedStock;
+            updateData.stock = parsedStock;
         }
-        
-        updates.updated_at = new Date();
 
         const db = await getDatabase();
         const result = await db.collection<Reward>('rewards').updateOne(
             { _id: new ObjectId(id) },
-            { $set: updates }
+            { $set: updateData }
         );
 
         if (result.matchedCount === 0) {

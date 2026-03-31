@@ -15,6 +15,8 @@ import { validateConfig } from './lib/config';
 const config = validateConfig();
 const app = express();
 
+app.disable('x-powered-by');
+
 const corsOptions: CorsOptions = {
     origin(origin, callback) {
         if (!origin) {
@@ -30,7 +32,18 @@ const corsOptions: CorsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+
+    if (config.isProduction) {
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+
+    next();
+});
+app.use(express.json({ limit: '100kb' }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/waste', wasteRoutes);
@@ -64,6 +77,18 @@ app.get('/ready', async (req, res) => {
             error: (error as Error).message,
         });
     }
+});
+
+app.use((error: Error & { type?: string; status?: number }, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (error.type === 'entity.parse.failed') {
+        return res.status(400).json({ error: 'Invalid JSON payload' });
+    }
+
+    if (error.status === 413) {
+        return res.status(413).json({ error: 'Payload too large' });
+    }
+
+    return next(error);
 });
 
 async function startServer() {

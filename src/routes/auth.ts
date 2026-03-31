@@ -3,15 +3,21 @@ import { getDatabase } from '../lib/mongodb';
 import { hashPassword, comparePassword, generateToken } from '../lib/auth';
 import { generateWallet, encryptPrivateKey } from '../lib/wallet';
 import { User, Wallet } from '../models/types';
+import { normalizeEmail, sanitizeString } from '../lib/validation';
+import { createRateLimiter } from '../lib/rate-limit';
 
 const router = Router();
+const authRateLimiter = createRateLimiter(15 * 60 * 1000, 20);
 
 // POST /api/auth/register
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', authRateLimiter, async (req: Request, res: Response) => {
     try {
-        const { user_id, name, email, password, role = 'user' } = req.body;
+        const userId = sanitizeString(req.body.user_id, 64);
+        const name = sanitizeString(req.body.name, 120);
+        const email = normalizeEmail(req.body.email);
+        const password = typeof req.body.password === 'string' ? req.body.password : '';
 
-        if (!user_id || !name || !email || !password) {
+        if (!userId || !name || !email || !password) {
             return res.status(400).json({ error: 'ID User, Name, Email and Password are required' });
         }
 
@@ -26,7 +32,7 @@ router.post('/register', async (req: Request, res: Response) => {
 
         const db = await getDatabase();
 
-        const existingUserId = await db.collection<User>('users').findOne({ user_id });
+        const existingUserId = await db.collection<User>('users').findOne({ user_id: userId });
         if (existingUserId) {
             return res.status(409).json({ error: 'User ID already exists' });
         }
@@ -41,11 +47,11 @@ router.post('/register', async (req: Request, res: Response) => {
         const { encryptedKey, iv } = encryptPrivateKey(wallet.privateKey);
 
         const user: User = {
-            user_id,
+            user_id: userId,
             name,
             email,
             password_hash,
-            role: role as 'user' | 'officer',
+            role: 'user',
             wallet_address: wallet.address,
             created_at: new Date(),
             updated_at: new Date(),
@@ -89,9 +95,10 @@ router.post('/register', async (req: Request, res: Response) => {
 });
 
 // POST /api/auth/login
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', authRateLimiter, async (req: Request, res: Response) => {
     try {
-        const { email, password } = req.body;
+        const email = normalizeEmail(req.body.email);
+        const password = typeof req.body.password === 'string' ? req.body.password : '';
 
         if (!email || !password) {
             return res.status(400).json({ error: 'Email and password are required' });

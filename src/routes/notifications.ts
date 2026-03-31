@@ -3,6 +3,7 @@ import { getDatabase } from '../lib/mongodb';
 import { authMiddleware, AuthenticatedRequest } from '../lib/auth-middleware';
 import { Notification } from '../models/types';
 import { ObjectId } from 'mongodb';
+import { isValidObjectId } from '../lib/validation';
 
 const router = Router();
 
@@ -42,6 +43,11 @@ router.put('/read-all', authMiddleware, async (req: AuthenticatedRequest, res: R
 router.put('/:id/read', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
+
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ error: 'Invalid notification ID' });
+        }
+
         const db = await getDatabase();
         
         const result = await db.collection<Notification>('notifications').updateOne(

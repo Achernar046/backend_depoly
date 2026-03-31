@@ -4,25 +4,18 @@ import { officerMiddleware, AuthenticatedRequest } from '../lib/auth-middleware'
 import { mintCoins } from '../lib/blockchain';
 import { Transaction } from '../models/types';
 import { ObjectId } from 'mongodb';
+import { isValidObjectId, parsePositiveNumber } from '../lib/validation';
 
 const router = Router();
-
-function isValidObjectId(value: string): boolean {
-    return ObjectId.isValid(value);
-}
 
 // POST /api/officer/add-coins
 router.post('/add-coins', officerMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { user_id, amount } = req.body;
-        const numericAmount = Number(amount);
+        const numericAmount = parsePositiveNumber(amount);
 
-        if (!user_id || !numericAmount) {
+        if (!user_id || numericAmount === null) {
             return res.status(400).json({ error: 'User ID and amount are required' });
-        }
-
-        if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-            return res.status(400).json({ error: 'Amount must be greater than 0' });
         }
 
         if (!isValidObjectId(user_id)) {
@@ -87,6 +80,28 @@ router.get('/transactions', officerMiddleware, async (req: AuthenticatedRequest,
                     }
                 },
                 { $unwind: '$user' },
+                {
+                    $project: {
+                        _id: 1,
+                        user_id: 1,
+                        type: 1,
+                        amount: 1,
+                        from_address: 1,
+                        to_address: 1,
+                        blockchain_tx_hash: 1,
+                        waste_submission_id: 1,
+                        status: 1,
+                        created_at: 1,
+                        'user._id': 1,
+                        'user.user_id': 1,
+                        'user.name': 1,
+                        'user.email': 1,
+                        'user.role': 1,
+                        'user.wallet_address': 1,
+                        'user.created_at': 1,
+                        'user.updated_at': 1,
+                    }
+                },
                 { $sort: { created_at: -1 } },
                 { $limit: 50 }
             ]).toArray();
