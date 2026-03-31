@@ -98,6 +98,12 @@ export async function getUserWalletSigner(userId: string): Promise<ethers.Wallet
     );
 
     const provider = getProvider();
-    return new ethers.Wallet(privateKey, provider);
+    const signer = new ethers.Wallet(privateKey, provider);
+
+    if (signer.address.toLowerCase() !== walletDoc.address.toLowerCase()) {
+        throw new Error('Stored wallet key does not match wallet address');
+    }
+
+    return signer;
 }
 
