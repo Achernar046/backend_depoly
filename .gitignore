@@ -48,3 +48,5 @@ Thumbs.db
 .backup/
 scripts/test-api-integration.js
 scripts/test-blockchain-connection.js
+backend-deploy/
+projectW/
