@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './auth.module.css';
+import { buildApiUrl } from '../../lib/api';
 
 export default function AuthPage() {
     const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -15,15 +16,15 @@ export default function AuthPage() {
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const router = useRouter();
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setLoading(true);
 
         try {
-            const endpoint = mode === 'login' ? `${API_URL}/api/auth/login` : `${API_URL}/api/auth/register`;
+            const endpoint = mode === 'login'
+                ? buildApiUrl('/api/auth/login')
+                : buildApiUrl('/api/auth/register');
             const body = mode === 'login'
                 ? { email, password }
                 : { user_id: userId, name, email, password, role };

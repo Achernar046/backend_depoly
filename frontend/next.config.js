@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const path = require('path');
+
 const nextConfig = {
     reactStrictMode: true,
     webpack: (config) => {
@@ -10,8 +12,9 @@ const nextConfig = {
         };
         return config;
     },
-    // Add empty turbopack config to silence Turbopack error
-    turbopack: {},
+    turbopack: {
+        root: path.resolve(__dirname),
+    },
     images: {
         remotePatterns: [
             {

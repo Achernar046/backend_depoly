@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './officer.module.css';
+import { buildApiUrl } from '../../lib/api';
 
 interface User {
     id: string;
@@ -10,7 +11,7 @@ interface User {
     name: string;
     email: string;
     walletAddress: string;
-    createdAt: Date;
+    createdAt: string;
 }
 
 interface TransactionRecord {
@@ -30,7 +31,6 @@ interface TransactionRecord {
 
 export default function OfficerDashboard() {
     const router = useRouter();
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
     const [user, setUser] = useState<any>(null);
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
@@ -66,12 +66,23 @@ export default function OfficerDashboard() {
 
     const fetchUsers = async (token: string) => {
         try {
-            const response = await fetch(`${API_URL}/api/users/list`, {
+            const response = await fetch(buildApiUrl('/api/users/list'), {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await response.json();
             if (response.ok) {
-                setUsers(Array.isArray(data) ? data : (data.users || []));
+                setUsers(
+                    Array.isArray(data)
+                        ? data.map((entry: any) => ({
+                            id: entry._id,
+                            userId: entry.user_id,
+                            name: entry.name,
+                            email: entry.email,
+                            walletAddress: entry.wallet_address,
+                            createdAt: entry.created_at,
+                        }))
+                        : []
+                );
             }
         } catch (error) {
             console.error('Failed to fetch users:', error);
@@ -82,13 +93,14 @@ export default function OfficerDashboard() {
 
     const fetchTransactions = async (token: string) => {
         try {
-            const response = await fetch(`${API_URL}/api/officer/transactions`, {
+            const response = await fetch(buildApiUrl('/api/officer/transactions'), {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await response.json();
             if (response.ok) {
-                setTransactions(Array.isArray(data) ? data : (data.transactions || []));
-                setTotalDistributed(data.totalDistributed || 0);
+                const nextTransactions = Array.isArray(data) ? data : [];
+                setTransactions(nextTransactions);
+                setTotalDistributed(nextTransactions.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0));
             }
         } catch (error) {
             console.error('Failed to fetch transactions:', error);
@@ -97,12 +109,12 @@ export default function OfficerDashboard() {
 
     const fetchPendingCount = async (token: string) => {
         try {
-            const response = await fetch(`${API_URL}/api/waste/pending`, {
+            const response = await fetch(buildApiUrl('/api/waste/pending'), {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await response.json();
             if (response.ok) {
-                setPendingCount(data.count);
+                setPendingCount(Array.isArray(data) ? data.length : 0);
             }
         } catch (error) {
             console.error('Failed to fetch pending count:', error);
@@ -137,7 +149,7 @@ export default function OfficerDashboard() {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${API_URL}/api/officer/add-coins`, {
+            const response = await fetch(buildApiUrl('/api/officer/add-coins'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -161,6 +173,7 @@ export default function OfficerDashboard() {
             // Refresh transactions
             if (token) {
                 fetchTransactions(token);
+                fetchPendingCount(token);
             }
         } catch (error: any) {
             setMessage('error:' + error.message);
